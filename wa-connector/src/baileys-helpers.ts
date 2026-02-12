@@ -165,9 +165,26 @@ export function messageToRow(
   phone_number: string | null;
   metadata_json: Record<string, unknown> | null;
 } {
-  const ts = msg?.messageTimestamp
-    ? new Date(Number(msg.messageTimestamp) * 1000)
-    : new Date();
+  // Parse timestamp with validation: Baileys messageTimestamp is Unix seconds.
+  // Some messages from history sync have timestamps shifted ~20 years into the
+  // future (likely a protobuf Long deserialization issue). Clamp to now() if
+  // the resulting date is more than 1 day in the future.
+  let ts: Date;
+  if (msg?.messageTimestamp) {
+    const epochMs = Number(msg.messageTimestamp) * 1000;
+    const candidate = new Date(epochMs);
+    const oneDayFromNow = Date.now() + 86_400_000;
+    if (candidate.getTime() > oneDayFromNow) {
+      console.warn(
+        `[baileys] Future timestamp detected: ${candidate.toISOString()} (epoch=${msg.messageTimestamp}), using current time`
+      );
+      ts = new Date();
+    } else {
+      ts = candidate;
+    }
+  } else {
+    ts = new Date();
+  }
 
   // Phone number of the other party:
   //   Groups: participant is the actual sender
