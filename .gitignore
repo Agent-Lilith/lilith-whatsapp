@@ -1,0 +1,28 @@
+# Local data (backups, keys) – not used by this implementation
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.python-version
+
+# Env
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Bun / Node (wa-connector)
+wa-connector/node_modules/
+wa-connector/.env
+wa-connector/auth_state/
