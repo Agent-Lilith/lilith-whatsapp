@@ -1,9 +1,7 @@
 import logging
-from typing import List, Union
-
-import httpx
 
 from common.embeddings import Embedder as SharedEmbedder
+
 from .config import settings
 from .models import EMBEDDING_DIM
 

@@ -1,11 +1,11 @@
 """Run MCP server (stdio or HTTP). Hybrid search over WhatsApp messages."""
-import argparse
-import os
+
 import sys
 
 
 def main() -> int:
     from mcp_server.server import main as server_main
+
     server_main()
     return 0
 

@@ -1,14 +1,12 @@
 """Hybrid search over WhatsApp messages: structured + fulltext + vector."""
 
 import logging
-import time
-from datetime import date, datetime, time as dtime
+from datetime import date, datetime
+from datetime import time as dtime
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
-from core.embeddings import Embedder
 from core.models import Chat, Contact, Message
 
 logger = logging.getLogger(__name__)
@@ -44,7 +42,9 @@ def _apply_filters(stmt, filters: list[dict[str, Any]] | None):
         elif field == "date_after" and value:
             stmt = stmt.where(Message.timestamp >= _parse_date_bound(str(value)))
         elif field == "date_before" and value:
-            stmt = stmt.where(Message.timestamp <= _parse_date_bound(str(value), end_of_day=True))
+            stmt = stmt.where(
+                Message.timestamp <= _parse_date_bound(str(value), end_of_day=True)
+            )
     return stmt
 
 
@@ -58,7 +58,11 @@ def _message_to_result(
     contact_push_name: str | None = None,
 ) -> dict[str, Any]:
     """Build SearchResultV1-compatible dict. Prefer timestamp_value from query row over msg.timestamp."""
-    ts = timestamp_value if timestamp_value is not None else getattr(msg, "_explicit_ts", None) or msg.timestamp
+    ts = (
+        timestamp_value
+        if timestamp_value is not None
+        else getattr(msg, "_explicit_ts", None) or msg.timestamp
+    )
     ts_iso = ts.isoformat() if ts else None
     ts_display = ts.strftime("%Y-%m-%d %H:%M") if ts else "?"
 
@@ -84,7 +88,9 @@ def _message_to_result(
         chat_label = contact_push_name.strip()
     else:
         chat_label = msg.remote_jid or "Chat"
-    title = f"{direction} in {chat_label}" if chat_name else f"{direction} ({chat_label})"
+    title = (
+        f"{direction} in {chat_label}" if chat_name else f"{direction} ({chat_label})"
+    )
 
     metadata: dict[str, Any] = {
         "chat_id": msg.chat_id,
@@ -110,7 +116,9 @@ def _message_to_result(
 
 
 from common.search import BaseHybridSearchEngine
-from core.models import Chat, Message
+
+from core.models import Message
+
 
 class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
     """Hybrid search over WhatsApp messages using lilith-core."""
@@ -128,14 +136,20 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
             elif field == "date_after" and value:
                 stmt = stmt.where(Message.timestamp >= _parse_date_bound(str(value)))
             elif field == "date_before" and value:
-                stmt = stmt.where(Message.timestamp <= _parse_date_bound(str(value), end_of_day=True))
+                stmt = stmt.where(
+                    Message.timestamp <= _parse_date_bound(str(value), end_of_day=True)
+                )
         return stmt
 
     def _get_item_id(self, item: Message) -> int:
         return item.id
 
-    def _structured(self, filters: list[dict] | None, limit: int) -> list[tuple[Message, float]]:
-        stmt = select(Message, Chat.name, Message.timestamp).join(Chat, Message.chat_id == Chat.id)
+    def _structured(
+        self, filters: list[dict] | None, limit: int
+    ) -> list[tuple[Message, float]]:
+        stmt = select(Message, Chat.name, Message.timestamp).join(
+            Chat, Message.chat_id == Chat.id
+        )
         stmt = self._apply_filters(stmt, filters)
         stmt = stmt.order_by(Message.timestamp.desc().nullslast()).limit(limit)
         rows = self.db.execute(stmt).all()
@@ -147,7 +161,9 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
             results.append((msg, max(0.3, 1.0 - i * 0.03)))
         return results
 
-    def _fulltext(self, query: str, filters: list[dict] | None, limit: int) -> list[tuple[Message, float]]:
+    def _fulltext(
+        self, query: str, filters: list[dict] | None, limit: int
+    ) -> list[tuple[Message, float]]:
         tsquery = func.plainto_tsquery("simple", query)
         rank = func.ts_rank_cd(Message.search_tsv, tsquery)
         stmt = select(Message, Chat.name, rank.label("rank"), Message.timestamp).join(
@@ -156,7 +172,9 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
         stmt = self._apply_filters(stmt, filters)
         stmt = stmt.where(Message.search_tsv.isnot(None))
         stmt = stmt.where(Message.search_tsv.op("@@")(tsquery))
-        stmt = stmt.order_by(rank.desc(), Message.timestamp.desc().nullslast()).limit(limit)
+        stmt = stmt.order_by(rank.desc(), Message.timestamp.desc().nullslast()).limit(
+            limit
+        )
         rows = self.db.execute(stmt).all()
         results = []
         for row in rows:
@@ -166,16 +184,18 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
             results.append((msg, min(1.0, max(0.1, float(row[2])))))
         return results
 
-    def _vector(self, query: str, filters: list[dict] | None, limit: int) -> list[tuple[Message, float]]:
+    def _vector(
+        self, query: str, filters: list[dict] | None, limit: int
+    ) -> list[tuple[Message, float]]:
         if not self.embedder:
             return []
         embedding = self.embedder.encode_sync(query)
         if not embedding or not any(x != 0 for x in embedding):
             return []
         dist = Message.body_embedding.cosine_distance(embedding)
-        stmt = select(Message, Chat.name, dist.label("distance"), Message.timestamp).join(
-            Chat, Message.chat_id == Chat.id
-        )
+        stmt = select(
+            Message, Chat.name, dist.label("distance"), Message.timestamp
+        ).join(Chat, Message.chat_id == Chat.id)
         stmt = self._apply_filters(stmt, filters)
         stmt = stmt.where(Message.body_embedding.isnot(None))
         stmt = stmt.order_by(dist, Message.timestamp.desc().nullslast()).limit(limit)
@@ -191,23 +211,39 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
     def _get_item_by_id(self, item_id: int, **kwargs) -> Message | None:
         return self.db.get(Message, item_id)
 
-    def _format_result(self, item: Message, scores: dict[str, float], methods: list[str]) -> dict[str, Any]:
+    def _format_result(
+        self, item: Message, scores: dict[str, float], methods: list[str]
+    ) -> dict[str, Any]:
         chat_name = getattr(item, "_chat_name", None)
         contact_push_name: str | None = None
         try:
             # Resolve push name for the other party (person user talked to or who wrote the message)
             if item.from_me:
                 # Message from user: other party is the chat (DM) or group; for DM use remote_jid
-                jid = None if (item.remote_jid or "").endswith("@g.us") else item.remote_jid
+                jid = (
+                    None
+                    if (item.remote_jid or "").endswith("@g.us")
+                    else item.remote_jid
+                )
             else:
                 # Message from contact: other party is participant (group) or remote_jid (DM)
-                jid = (item.participant if (item.remote_jid or "").endswith("@g.us") else None) or item.remote_jid
+                jid = (
+                    item.participant
+                    if (item.remote_jid or "").endswith("@g.us")
+                    else None
+                ) or item.remote_jid
             if jid:
-                contact = self.db.execute(select(Contact.push_name).where(Contact.wa_id == jid).limit(1)).first()
+                contact = self.db.execute(
+                    select(Contact.push_name).where(Contact.wa_id == jid).limit(1)
+                ).first()
                 if contact and contact[0]:
                     contact_push_name = contact[0]
         except Exception as e:
-            logger.debug("Contact push_name lookup failed for jid=%s: %s", getattr(item, "remote_jid", None), e)
+            logger.debug(
+                "Contact push_name lookup failed for jid=%s: %s",
+                getattr(item, "remote_jid", None),
+                e,
+            )
         return _message_to_result(
             item, chat_name, scores, methods, contact_push_name=contact_push_name
         )

@@ -1,6 +1,6 @@
 """Backfill body_embedding for messages that have body_text but no embedding. Run after Bun sync."""
+
 import logging
-from typing import List
 
 from sqlalchemy import select, update
 
@@ -33,27 +33,45 @@ def run_embed_backfill(batch_size: int = BATCH_SIZE, limit: int | None = None) -
             if not rows:
                 break
             ids = [r[0] for r in rows]
-            texts: List[str] = [r[1] or "" for r in rows]
+            texts: list[str] = [r[1] or "" for r in rows]
         try:
             embeddings = embedder.encode_sync(texts)
         except Exception as e:
             logger.exception("Embedding API failed: %s", e)
             raise
-        if isinstance(embeddings, list) and embeddings and isinstance(embeddings[0], list):
+        if (
+            isinstance(embeddings, list)
+            and embeddings
+            and isinstance(embeddings[0], list)
+        ):
             pass  # list of lists
-        elif isinstance(embeddings, list) and embeddings and isinstance(embeddings[0], (int, float)):
+        elif (
+            isinstance(embeddings, list)
+            and embeddings
+            and isinstance(embeddings[0], (int, float))
+        ):
             embeddings = [embeddings]  # single vector
         else:
             embeddings = list(embeddings) if embeddings else []
         if len(embeddings) != len(ids):
-            logger.warning("Embedding count %d != batch size %d", len(embeddings), len(ids))
+            logger.warning(
+                "Embedding count %d != batch size %d", len(embeddings), len(ids)
+            )
         with db_session() as db:
             for mid, vec in zip(ids, embeddings):
                 if vec and len(vec) > 0:
-                    db.execute(update(Message).where(Message.id == mid).values(body_embedding=vec))
+                    db.execute(
+                        update(Message)
+                        .where(Message.id == mid)
+                        .values(body_embedding=vec)
+                    )
             # db_session commits on exit
         total_updated += len(ids)
-        logger.info("Embed backfill: %d messages updated (total so far: %d)", len(ids), total_updated)
+        logger.info(
+            "Embed backfill: %d messages updated (total so far: %d)",
+            len(ids),
+            total_updated,
+        )
         if limit is not None and total_updated >= limit:
             break
     return total_updated

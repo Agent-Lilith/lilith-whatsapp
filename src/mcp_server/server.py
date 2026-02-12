@@ -11,6 +11,7 @@ logger = logging.getLogger("mcp_server")
 
 mcp = create_mcp_app("Lilith WhatsApp")
 
+
 @mcp.tool()
 def search_capabilities() -> dict:
     """Return this server's search capabilities."""
@@ -21,16 +22,37 @@ def search_capabilities() -> dict:
         "source_class": "personal",
         "supported_methods": ["structured", "fulltext", "vector"],
         "supported_filters": [
-            {"name": "chat_id", "type": "integer", "operators": ["eq"], "description": "Filter by chat"},
-            {"name": "from_me", "type": "boolean", "operators": ["eq"], "description": "Sent by me"},
-            {"name": "date_after", "type": "date", "operators": ["gte"], "description": "Message on or after"},
-            {"name": "date_before", "type": "date", "operators": ["lte"], "description": "Message on or before"},
+            {
+                "name": "chat_id",
+                "type": "integer",
+                "operators": ["eq"],
+                "description": "Filter by chat",
+            },
+            {
+                "name": "from_me",
+                "type": "boolean",
+                "operators": ["eq"],
+                "description": "Sent by me",
+            },
+            {
+                "name": "date_after",
+                "type": "date",
+                "operators": ["gte"],
+                "description": "Message on or after",
+            },
+            {
+                "name": "date_before",
+                "type": "date",
+                "operators": ["lte"],
+                "description": "Message on or before",
+            },
         ],
         "max_limit": 100,
         "default_limit": 10,
         "sort_fields": ["timestamp", "relevance"],
         "default_ranking": "vector",
     }
+
 
 @mcp.tool()
 def unified_search(
@@ -70,8 +92,10 @@ def unified_search(
             "error": str(e),
         }
 
+
 def main():
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--transport", default="stdio")
     parser.add_argument("--port", type=int, default=8002)
@@ -81,4 +105,5 @@ def main():
 
 if __name__ == "__main__":
     from mcp_server.__main__ import main as _main
+
     sys.exit(_main())
