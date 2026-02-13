@@ -14,7 +14,7 @@ def test_search_capabilities_shape():
 
     out = search_capabilities()
     assert out["schema_version"] == "1.0"
-    assert out["source_name"] == "whatsapp_messages"
+    assert out["source_name"] == "whatsapp"
     assert out["source_class"] == "personal"
     assert "structured" in out["supported_methods"]
     assert "fulltext" in out["supported_methods"]

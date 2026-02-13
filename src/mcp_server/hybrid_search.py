@@ -25,9 +25,7 @@ def _resolve_contact_for_jid(db, jid: str | None) -> tuple[str | None, str | Non
     conditions = [Contact.wa_id == jid]
     if jid.endswith("@s.whatsapp.net"):
         number = jid.removesuffix("@s.whatsapp.net")
-        conditions.extend(
-            [Contact.phone_number == number, Contact.phone_number == jid]
-        )
+        conditions.extend([Contact.phone_number == number, Contact.phone_number == jid])
     elif jid.endswith("@lid"):
         conditions.append(Contact.lid == jid)
     row = db.execute(
@@ -132,7 +130,7 @@ def _message_to_result(
 
     return {
         "id": str(msg.id),
-        "source": "whatsapp_messages",
+        "source": "whatsapp",
         "source_class": "personal",
         "title": title,
         "snippet": (msg.body_text or "")[:500],
@@ -247,7 +245,7 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
         contact_push_name: str | None = None
         contact_wa_id: str | None = None
         try:
-            # Resolve contact by the JID used in the message (LID or PN); match uses wa_id OR lid OR phone_number
+            # Resolve contact by message remote_jid (can be wa_id or lid; contacts.wa_id / contacts.lid match)
             if item.from_me:
                 jid = (
                     None

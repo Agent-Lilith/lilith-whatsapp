@@ -18,8 +18,9 @@ def search_capabilities() -> dict:
     # ... unchanged implementation
     return {
         "schema_version": "1.0",
-        "source_name": "whatsapp_messages",
+        "source_name": "whatsapp",
         "source_class": "personal",
+        "display_label": "WhatsApp messages",
         "supported_methods": ["structured", "fulltext", "vector"],
         "supported_filters": [
             {

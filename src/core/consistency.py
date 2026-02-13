@@ -47,7 +47,7 @@ def _run_check_message_chat_jid_alignment(session) -> CheckResult:
         for row in r
     ]
     if len(r) >= 500:
-        details.append(f"  ... and possibly more (capped at 500)")
+        details.append("  ... and possibly more (capped at 500)")
     return CheckResult(
         "Message–chat JID alignment",
         False,
@@ -173,7 +173,9 @@ def _run_check_duplicate_chats_same_peer(session) -> CheckResult:
     details = []
     for group in duplicates[:20]:
         peer = _normalize_peer(group[0][1], group[0][2])
-        details.append(f"  peer {peer!r}: chat_ids={[c[0] for c in group]} jids={[c[1] for c in group]}")
+        details.append(
+            f"  peer {peer!r}: chat_ids={[c[0] for c in group]} jids={[c[1] for c in group]}"
+        )
     if len(duplicates) > 20:
         details.append(f"  ... and {len(duplicates) - 20} more duplicate groups")
     return CheckResult(
@@ -207,8 +209,12 @@ def print_report(results: list[CheckResult]) -> None:
     errors = sum(x.error_count for x in results)
     warnings = sum(x.warning_count for x in results)
     if errors:
-        print(f"Total: {errors} error(s), {warnings} warning(s) — data is inconsistent.")
+        print(
+            f"Total: {errors} error(s), {warnings} warning(s) — data is inconsistent."
+        )
     elif warnings:
-        print(f"Total: 0 errors, {warnings} warning(s) — data is consistent but has duplicate chats for same peers.")
+        print(
+            f"Total: 0 errors, {warnings} warning(s) — data is consistent but has duplicate chats for same peers."
+        )
     else:
         print("Total: 0 errors, 0 warnings — data is consistent.")
