@@ -20,9 +20,20 @@ def cmd_embed(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check(args: argparse.Namespace) -> int:
+    from core.consistency import print_report, run_consistency_checks
+
+    results = run_consistency_checks()
+    print_report(results)
+    has_errors = any(r.error_count for r in results)
+    return 1 if has_errors else 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Lilith WhatsApp")
-    parser.add_argument("command", nargs="?", default="mcp", help="mcp | serve | embed")
+    parser.add_argument(
+        "command", nargs="?", default="mcp", help="mcp | serve | embed | check"
+    )
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -36,6 +47,8 @@ def main() -> int:
 
     if args.command == "embed":
         return cmd_embed(args)
+    if args.command == "check":
+        return cmd_check(args)
     if args.command == "serve":
         from mcp_server.__main__ import main as mcp_main
 

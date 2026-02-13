@@ -38,6 +38,19 @@ npm run listen
 
 Use the same **AUTH_STATE_DIR** as in step 3 so it reuses the same session.
 
+## Tests
+
+```bash
+uv sync --extra dev
+uv run pytest tests/ -v
+```
+
+Unit tests run without a database. Integration tests (contact resolution against Pouyan’s LID/PN, unified_search) require `DATABASE_URL`; `.env` in the project root is loaded automatically so you don’t need to export it. They are marked `integration`; skip them with:
+
+```bash
+uv run pytest tests/ -v -m "not integration"
+```
+
 ## MCP Server (Agent Tools)
 
 The Lilith WhatsApp MCP server.

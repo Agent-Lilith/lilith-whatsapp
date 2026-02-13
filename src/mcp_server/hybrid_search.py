@@ -5,11 +5,37 @@ from datetime import date, datetime
 from datetime import time as dtime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from core.models import Chat, Contact, Message
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_contact_for_jid(db, jid: str | None) -> tuple[str | None, str | None]:
+    """Resolve contact for a message/chat JID (PN or LID). Returns (push_name, contact_wa_id).
+
+    Matches by wa_id = jid OR lid = jid (for @lid) OR phone_number (for @s.whatsapp.net),
+    so one contact row is found whether the message uses LID or PN for the same person.
+    See docs/contact-matching.md.
+    """
+    if not jid or not jid.strip():
+        return (None, None)
+    jid = jid.strip()
+    conditions = [Contact.wa_id == jid]
+    if jid.endswith("@s.whatsapp.net"):
+        number = jid.removesuffix("@s.whatsapp.net")
+        conditions.extend(
+            [Contact.phone_number == number, Contact.phone_number == jid]
+        )
+    elif jid.endswith("@lid"):
+        conditions.append(Contact.lid == jid)
+    row = db.execute(
+        select(Contact.push_name, Contact.wa_id).where(or_(*conditions)).limit(1)
+    ).first()
+    if not row:
+        return (None, None)
+    return (row[0] if row[0] else None, row[1])
 
 
 def _parse_date_bound(s: str, end_of_day: bool = False) -> datetime:
@@ -56,8 +82,9 @@ def _message_to_result(
     *,
     timestamp_value: datetime | None = None,
     contact_push_name: str | None = None,
+    contact_wa_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build SearchResultV1-compatible dict. Prefer timestamp_value from query row over msg.timestamp."""
+    """Build SearchResultV1-compatible dict. contact_* are from contacts (matched by message JID: wa_id or lid or phone_number)."""
     ts = (
         timestamp_value
         if timestamp_value is not None
@@ -100,6 +127,8 @@ def _message_to_result(
     }
     if contact_push_name and contact_push_name.strip():
         metadata["contact_push_name"] = contact_push_name.strip()
+    if contact_wa_id:
+        metadata["contact_wa_id"] = contact_wa_id
 
     return {
         "id": str(msg.id),
@@ -216,34 +245,36 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
     ) -> dict[str, Any]:
         chat_name = getattr(item, "_chat_name", None)
         contact_push_name: str | None = None
+        contact_wa_id: str | None = None
         try:
-            # Resolve push name for the other party (person user talked to or who wrote the message)
+            # Resolve contact by the JID used in the message (LID or PN); match uses wa_id OR lid OR phone_number
             if item.from_me:
-                # Message from user: other party is the chat (DM) or group; for DM use remote_jid
                 jid = (
                     None
                     if (item.remote_jid or "").endswith("@g.us")
                     else item.remote_jid
                 )
             else:
-                # Message from contact: other party is participant (group) or remote_jid (DM)
                 jid = (
                     item.participant
                     if (item.remote_jid or "").endswith("@g.us")
                     else None
                 ) or item.remote_jid
             if jid:
-                contact = self.db.execute(
-                    select(Contact.push_name).where(Contact.wa_id == jid).limit(1)
-                ).first()
-                if contact and contact[0]:
-                    contact_push_name = contact[0]
+                contact_push_name, contact_wa_id = _resolve_contact_for_jid(
+                    self.db, jid
+                )
         except Exception as e:
             logger.debug(
-                "Contact push_name lookup failed for jid=%s: %s",
+                "Contact lookup failed for jid=%s: %s",
                 getattr(item, "remote_jid", None),
                 e,
             )
         return _message_to_result(
-            item, chat_name, scores, methods, contact_push_name=contact_push_name
+            item,
+            chat_name,
+            scores,
+            methods,
+            contact_push_name=contact_push_name,
+            contact_wa_id=contact_wa_id,
         )
