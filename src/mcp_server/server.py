@@ -17,10 +17,15 @@ def search_capabilities() -> dict:
     """Return this server's search capabilities."""
     # ... unchanged implementation
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.2",
         "source_name": "whatsapp",
         "source_class": "personal",
         "display_label": "WhatsApp messages",
+        "alias_hints": ["wa", "chat"],
+        "freshness_window_days": 1,
+        "latency_tier": "low",
+        "quality_tier": "high",
+        "cost_tier": "low",
         "supported_methods": ["structured", "fulltext", "vector"],
         "supported_modes": ["search", "count", "aggregate"],
         "supported_group_by_fields": ["chat_id", "contact_push_name"],

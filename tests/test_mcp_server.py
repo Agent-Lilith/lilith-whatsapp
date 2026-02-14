@@ -13,9 +13,13 @@ def test_search_capabilities_shape():
     from mcp_server.server import search_capabilities
 
     out = search_capabilities()
-    assert out["schema_version"] == "1.0"
+    assert out["schema_version"] == "1.2"
     assert out["source_name"] == "whatsapp"
     assert out["source_class"] == "personal"
+    assert out["latency_tier"] == "low"
+    assert out["quality_tier"] == "high"
+    assert out["cost_tier"] == "low"
+    assert out["freshness_window_days"] == 1
     assert "structured" in out["supported_methods"]
     assert "fulltext" in out["supported_methods"]
     assert "vector" in out["supported_methods"]
