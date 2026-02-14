@@ -5,7 +5,7 @@ from datetime import date, datetime
 from datetime import time as dtime
 from typing import Any
 
-from sqlalchemy import coalesce, func, or_, select
+from sqlalchemy import func, or_, select
 
 from core.models import Chat, Contact, Message
 
@@ -284,18 +284,20 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
             ]
         else:
             # contact_push_name: group by counterparty JID, resolve to push_name
-            counterparty = coalesce(Message.participant, Message.remote_jid)
-            stmt = (
+            counterparty = func.coalesce(Message.participant, Message.remote_jid)
+            stmt_contact = (
                 select(counterparty.label("jid"), func.count().label("cnt"))
                 .select_from(Message)
                 .where(counterparty.isnot(None))
                 .where(counterparty != "")
             )
-            stmt = self._apply_filters(stmt, filters)
-            stmt = stmt.group_by(counterparty).order_by(
-                func.count().desc()
-            ).limit(top_n)
-            rows = self.db.execute(stmt).all()
+            stmt_contact = self._apply_filters(stmt_contact, filters)
+            stmt_contact = (
+                stmt_contact.group_by(counterparty)
+                .order_by(func.count().desc())
+                .limit(top_n)
+            )
+            rows = self.db.execute(stmt_contact).all()
             aggregates = []
             for jid, cnt in rows:
                 jid_str = str(jid or "")
