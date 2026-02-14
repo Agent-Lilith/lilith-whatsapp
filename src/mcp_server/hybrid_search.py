@@ -261,16 +261,18 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
     ) -> dict:
         """Return top groups by message count. group_by: chat_id or contact_push_name."""
         if group_by == "chat_id":
-            stmt = (
+            stmt_chat = (
                 select(Chat.id, Chat.name, func.count().label("cnt"))
                 .select_from(Message)
                 .join(Chat, Message.chat_id == Chat.id)
             )
-            stmt = self._apply_filters(stmt, filters)
-            stmt = stmt.group_by(Chat.id, Chat.name).order_by(
-                func.count().desc()
-            ).limit(top_n)
-            rows = self.db.execute(stmt).all()
+            stmt_chat = self._apply_filters(stmt_chat, filters)
+            stmt_chat = (
+                stmt_chat.group_by(Chat.id, Chat.name)
+                .order_by(func.count().desc())
+                .limit(top_n)
+            )
+            rows = self.db.execute(stmt_chat).all()
             aggregates = [
                 {
                     "group_value": str(row[0]),
