@@ -5,7 +5,7 @@ from datetime import date, datetime
 from datetime import time as dtime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import coalesce, func, or_, select
 
 from core.models import Chat, Contact, Message
 
@@ -237,6 +237,85 @@ class HybridMessageSearchEngine(BaseHybridSearchEngine[Message]):
 
     def _get_item_by_id(self, item_id: int, **kwargs) -> Message | None:
         return self.db.get(Message, item_id)
+
+    def count(self, filters: list[dict[str, Any]] | None = None) -> dict:
+        """Return total count of matching messages."""
+        stmt = select(func.count()).select_from(Message)
+        stmt = self._apply_filters(stmt, filters)
+        total = self.db.execute(stmt).scalar() or 0
+        return {
+            "results": [],
+            "total_available": total,
+            "count": total,
+            "mode": "count",
+            "methods_executed": ["count"],
+            "timing_ms": {},
+            "error": None,
+        }
+
+    def aggregate(
+        self,
+        group_by: str,
+        filters: list[dict[str, Any]] | None = None,
+        top_n: int = 10,
+    ) -> dict:
+        """Return top groups by message count. group_by: chat_id or contact_push_name."""
+        if group_by == "chat_id":
+            stmt = (
+                select(Chat.id, Chat.name, func.count().label("cnt"))
+                .select_from(Message)
+                .join(Chat, Message.chat_id == Chat.id)
+            )
+            stmt = self._apply_filters(stmt, filters)
+            stmt = stmt.group_by(Chat.id, Chat.name).order_by(
+                func.count().desc()
+            ).limit(top_n)
+            rows = self.db.execute(stmt).all()
+            aggregates = [
+                {
+                    "group_value": str(row[0]),
+                    "count": row[2],
+                    "label": str(row[1] or "Unknown") if row[1] else "Unknown",
+                    "metadata": {},
+                }
+                for row in rows
+            ]
+        else:
+            # contact_push_name: group by counterparty JID, resolve to push_name
+            counterparty = coalesce(Message.participant, Message.remote_jid)
+            stmt = (
+                select(counterparty.label("jid"), func.count().label("cnt"))
+                .select_from(Message)
+                .where(counterparty.isnot(None))
+                .where(counterparty != "")
+            )
+            stmt = self._apply_filters(stmt, filters)
+            stmt = stmt.group_by(counterparty).order_by(
+                func.count().desc()
+            ).limit(top_n)
+            rows = self.db.execute(stmt).all()
+            aggregates = []
+            for jid, cnt in rows:
+                jid_str = str(jid or "")
+                push_name, _ = _resolve_contact_for_jid(self.db, jid_str)
+                label = (push_name or jid_str.split("@")[0] or "Unknown").strip()
+                aggregates.append(
+                    {
+                        "group_value": jid_str,
+                        "count": cnt,
+                        "label": label or jid_str,
+                        "metadata": {},
+                    }
+                )
+        return {
+            "results": [],
+            "total_available": 0,
+            "mode": "aggregate",
+            "aggregates": aggregates,
+            "methods_executed": ["aggregate"],
+            "timing_ms": {},
+            "error": None,
+        }
 
     def _format_result(
         self, item: Message, scores: dict[str, float], methods: list[str]

@@ -22,6 +22,8 @@ def search_capabilities() -> dict:
         "source_class": "personal",
         "display_label": "WhatsApp messages",
         "supported_methods": ["structured", "fulltext", "vector"],
+        "supported_modes": ["search", "count", "aggregate"],
+        "supported_group_by_fields": ["chat_id", "contact_push_name"],
         "supported_filters": [
             {
                 "name": "chat_id",
@@ -61,13 +63,31 @@ def unified_search(
     methods: list[str] | None = None,
     filters: list[dict] | None = None,
     top_k: int = 10,
+    mode: str = "search",
+    group_by: str | None = None,
+    aggregate_top_n: int = 10,
 ) -> dict:
-    """Hybrid search over WhatsApp messages (structured + fulltext + vector)."""
+    """Hybrid search over WhatsApp messages. Supports search, count, aggregate."""
     top_k = min(max(1, top_k), 100)
+    aggregate_top_n = min(max(1, aggregate_top_n), 100)
     try:
         with db_session() as db:
             embedder = Embedder()
             engine = HybridMessageSearchEngine(db, embedder)
+            if mode == "count":
+                return {
+                    "success": True,
+                    **engine.count(filters=filters),
+                }
+            if mode == "aggregate" and group_by in ("chat_id", "contact_push_name"):
+                return {
+                    "success": True,
+                    **engine.aggregate(
+                        group_by=group_by,
+                        filters=filters,
+                        top_n=aggregate_top_n,
+                    ),
+                }
             results, timing_ms, methods_executed = engine.search(
                 query=query,
                 methods=methods,
